@@ -11,9 +11,13 @@ __pycache__/
 
 # Project-generated data/artifacts
 data/
-results/
 tools/
 logs/
+
+# Keep only figures under results tracked
+results/*
+!results/figures/
+!results/figures/**
 
 # Genomics intermediate/output formats
 *.vcf
