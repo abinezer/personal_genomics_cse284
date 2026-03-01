@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local env and editor files
+.env
+.venv/
+.DS_Store
+
+# Project-generated data/artifacts
+data/
+results/
+tools/
+logs/
+
+# Genomics intermediate/output formats
+*.vcf
+*.vcf.gz
+*.vcf.gz.tbi
+*.bcf
+*.bcf.csi
+*.bed
+*.bim
+*.fam
+*.ped
+*.map
+*.genome
+*.nosex
+*.log
+
+# Temp files
+*.tmp
+*.swp
