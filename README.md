@@ -200,3 +200,20 @@ GERMLINE (phased haploid mode) detects more segments and more total IBD than Bea
 ## LLM Usage
 
 Claude (Anthropic) was used to assist with Python script development and documentation editing. The analysis design, interpretation, and core methods were developed by the project authors.
+
+## Remaining Work and Peer Feedback Requests
+
+### Remaining work before final submission (Week 10)
+
+- Add chromosome-wide analysis beyond chr22 (at least one additional chromosome) and compare whether method agreement changes with marker density.
+- Run a small parameter sweep for GERMLINE (`-min_m`) and Beagle (`ibdcm`, `ibdlod`) to evaluate sensitivity vs specificity tradeoffs.
+- Add runtime and memory benchmarking for both methods on the same input subset.
+- Expand validation beyond one parent-child pair by using additional pedigree-annotated pairs from 1000G.
+- Finalize result interpretation text, including limitations and biological implications of method-specific calls.
+
+### Challenges we want peer feedback on
+
+- Best way to calibrate fair thresholds between hash-based (GERMLINE) and HMM-based (Beagle) outputs for a meaningful comparison.
+- How to define and report agreement between methods beyond base-pair Jaccard (e.g., segment-level overlap criteria).
+- Whether our current sanity-check strategy is sufficient, or if we should add synthetic truth sets / downsampled experiments.
+- Recommended visualizations for comparing pair-level disagreement patterns across methods.
