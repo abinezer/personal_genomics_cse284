@@ -1,198 +1,195 @@
 #!/usr/bin/env bash
-# run_analysis.sh - Complete IBD comparison pipeline: GERMLINE vs Beagle
-# Usage: bash run_analysis.sh [--skip-data-prep]
+# run_analysis.sh — IBD comparison pipeline: GERMLINE vs Beagle
+#
+# Usage:
+#   bash run_analysis.sh                        # run all chromosomes in CHROMOSOMES
+#   CHROMOSOMES="22" bash run_analysis.sh       # single chromosome
 #
 # Requirements:
-#   plink   (PLINK 1.9, must be in PATH)
-#   java    (Java 8+)
-#   python3 (Python 3.6+, with matplotlib)
-#   bcftools (via module load or in PATH)
-#   tools/germline-master/germline (compiled from source in tools/)
-#   beagle.jar (Beagle 4.1, path set by BEAGLE_JAR below)
+#   java         (Java 8+, used for Beagle)
+#   python3      (Python 3.6+, with matplotlib)
+#   bcftools     (loaded via module or in PATH)
+#   tools/germline-master/germline
+#   tools/beagle.21Jan17.6cc.jar
 #
-# Data required in data/raw/:
-#   ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz
+# Data in data/raw/:
+#   ALL.chr{N}.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz
 #   integrated_call_samples_v3.20130502.ALL.panel
 #   integrated_call_samples_v3.20250704.ALL.ped
-#
-# All paths are relative to the repo root.
 set -euo pipefail
 
-# ── Configurable paths ────────────────────────────────────────────────────────
+# ── Config ────────────────────────────────────────────────────────────────────
 BEAGLE_JAR="${BEAGLE_JAR:-tools/beagle.21Jan17.6cc.jar}"
 GERMLINE="${GERMLINE:-tools/germline-master/germline}"
-PLINK="${PLINK:-plink}"
 BCFTOOLS="${BCFTOOLS:-bcftools}"
 PYTHON="${PYTHON:-python3}"
 
-RAW_VCF="data/raw/ALL.chr22.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz"
 PANEL="data/raw/integrated_call_samples_v3.20130502.ALL.panel"
 PED_FILE="data/raw/integrated_call_samples_v3.20250704.ALL.ped"
-CHR_LEN=51244237
 POPULATION="ASW"
 PARENT="NA20317"
 CHILD="NA20318"
 
-mkdir -p data/processed data/raw results/sanity results/summary results/figures logs
+# Chromosomes to process (space-separated)
+CHROMOSOMES="${CHROMOSOMES:-21 22}"
 
-# ── Load modules if on cluster ────────────────────────────────────────────────
+# FTP base for 1000G Phase 3 VCFs
+FTP_BASE="ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
+VCF_PATTERN="ALL.chr{CHR}.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz"
+
+mkdir -p data/processed data/raw results/summary results/figures logs
+
+# ── Load modules ──────────────────────────────────────────────────────────────
 module load bcftools/1.19 2>/dev/null || true
 
 # ═══════════════════════════════════════════════════════════════════
-# STEP 0: Extract parent-child pairs from pedigree
+# STEP 0: Extract parent-child pairs from pedigree (informational)
 # ═══════════════════════════════════════════════════════════════════
-echo "[0] Extracting parent-child pairs..."
+echo "[0] Extracting parent-child pairs from pedigree..."
 $PYTHON scripts/extract_parent_child_pairs.py \
     --ped "$PED_FILE" \
     --out data/processed/parent_child_pairs.tsv
 
 # ═══════════════════════════════════════════════════════════════════
-# STEP 1: Subset VCF to ASW population (biallelic SNPs only)
+# STEP 1: Extract ASW sample list
 # ═══════════════════════════════════════════════════════════════════
-echo "[1] Subsetting VCF to $POPULATION population..."
-awk -v pop="$POPULATION" 'NR>1 && $2==pop {print $1}' "$PANEL" > data/processed/asw.samples
-
-$BCFTOOLS view \
-    -S data/processed/asw.samples \
-    -m 2 -M 2 -v snps \
-    -O z -o data/processed/asw.chr22.bial.vcf.gz \
-    "$RAW_VCF"
-
-$BCFTOOLS index -t data/processed/asw.chr22.bial.vcf.gz
+echo "[1] Building ASW sample list..."
+awk -v pop="$POPULATION" 'NR>1 && $2==pop {print $1}' "$PANEL" \
+    > data/processed/asw.samples
+echo "  $(wc -l < data/processed/asw.samples) ASW samples"
 
 # ═══════════════════════════════════════════════════════════════════
-# STEP 2: Convert to PLINK format for PLINK and GERMLINE (unphased)
+# STEP 2: Per-chromosome processing
 # ═══════════════════════════════════════════════════════════════════
-echo "[2] Converting to PLINK format..."
-$PLINK \
-    --vcf data/processed/asw.chr22.bial.vcf.gz \
-    --recode \
-    --out data/processed/asw_bial \
-    --allow-extra-chr --chr 22 \
-    --biallelic-only strict \
-    --geno 0.05 \
-    --maf 0.01 \
-    --const-fid 0 \
-    --double-id \
-    2>&1 | tee logs/plink_recode.log
+for CHR in $CHROMOSOMES; do
+    echo ""
+    echo "══════════════════════════════════════════"
+    echo "  Chromosome $CHR"
+    echo "══════════════════════════════════════════"
 
-# Fill missing genotypes (required by GERMLINE)
-$PLINK \
-    --file data/processed/asw_bial \
-    --recode \
-    --fill-missing-a2 \
-    --out data/processed/asw_bial_filled \
-    2>&1 | tee logs/plink_fill.log
+    RAW_VCF="data/raw/ALL.chr${CHR}.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz"
+    OUTDIR="results/chr${CHR}"
+    mkdir -p "$OUTDIR" "data/processed/chr${CHR}"
 
-# ═══════════════════════════════════════════════════════════════════
-# STEP 3: PLINK genome (relatedness baseline)
-# ═══════════════════════════════════════════════════════════════════
-echo "[3] Running PLINK --genome..."
-$PLINK \
-    --bfile data/processed/asw_bial \
-    --genome \
-    --out results/asw_plink \
-    2>&1 | tee logs/plink_genome.log
+    # ── 2a: Download VCF if not present ─────────────────────────────
+    if [[ ! -f "$RAW_VCF" ]]; then
+        echo "  Downloading chr${CHR} VCF from 1000G FTP..."
+        FNAME="ALL.chr${CHR}.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz"
+        wget -q --show-progress \
+            -O "$RAW_VCF" \
+            "${FTP_BASE}/${FNAME}"
+        wget -q \
+            -O "${RAW_VCF}.tbi" \
+            "${FTP_BASE}/${FNAME}.tbi"
+        echo "  Downloaded $RAW_VCF"
+    else
+        echo "  VCF already present: $RAW_VCF"
+    fi
 
-# ═══════════════════════════════════════════════════════════════════
-# STEP 4: Create phased haplotype input for GERMLINE
-# ═══════════════════════════════════════════════════════════════════
-echo "[4] Converting phased VCF to GERMLINE haploid format..."
-$PYTHON scripts/vcf_to_germline_hap.py \
-    data/processed/asw.chr22.bial.vcf.gz \
-    --out data/processed/asw_hap \
-    2>&1 | tee logs/vcf_to_hap.log
+    ASW_VCF="data/processed/chr${CHR}/asw.chr${CHR}.bial.vcf.gz"
 
-# ═══════════════════════════════════════════════════════════════════
-# STEP 5: Run GERMLINE (phased haploid mode)
-# ═══════════════════════════════════════════════════════════════════
-echo "[5] Running GERMLINE (phased)..."
-$GERMLINE \
-    -input data/processed/asw_hap.ped data/processed/asw_hap.map \
-    -output results/asw_germline_phased \
-    -min_m 1 \
-    > results/asw_germline_phased.log 2>&1
-echo "  GERMLINE segments: $(wc -l < results/asw_germline_phased.match)"
+    # ── 2b: Subset to ASW, biallelic SNPs ───────────────────────────
+    if [[ ! -f "$ASW_VCF" ]]; then
+        echo "  Subsetting to ASW biallelic SNPs..."
+        $BCFTOOLS view \
+            -S data/processed/asw.samples \
+            -m 2 -M 2 -v snps \
+            -O z -o "$ASW_VCF" \
+            "$RAW_VCF"
+        $BCFTOOLS index -t "$ASW_VCF"
+        echo "  Variants: $($BCFTOOLS stats $ASW_VCF | grep '^SN' | grep 'SNPs' | awk '{print $4}')"
+    else
+        echo "  ASW VCF already present: $ASW_VCF"
+    fi
 
-# ═══════════════════════════════════════════════════════════════════
-# STEP 6: Run Beagle IBD detection
-# ═══════════════════════════════════════════════════════════════════
-echo "[6] Running Beagle IBD detection..."
-java -Xmx4g -jar "$BEAGLE_JAR" \
-    gt=data/processed/asw.chr22.bial.vcf.gz \
-    out=results/asw_beagle \
-    ibd=true \
-    ibdcm=0.5 \
-    ibdlod=1e-6 \
-    nthreads=4 \
-    > results/asw_beagle.log 2>&1
-echo "  Beagle segments: $(python3 -c "import gzip; d=gzip.open('results/asw_beagle.ibd.gz','rb').read(); print(d.count(b'\n'))")"
+    HAP_PREFIX="data/processed/chr${CHR}/asw_hap"
+    GERM_OUT="${OUTDIR}/asw_germline"
+    BEAGLE_OUT="${OUTDIR}/asw_beagle"
 
-# ═══════════════════════════════════════════════════════════════════
-# STEP 7: Sanity check - validate parent-child pair on chr22
-# ═══════════════════════════════════════════════════════════════════
-echo "[7] Sanity check: parent-child ($PARENT vs $CHILD)..."
-echo -e "$PARENT\n$CHILD" > data/processed/sanity_pair.samples
-$BCFTOOLS view \
-    -S data/processed/sanity_pair.samples \
-    -O z -o data/processed/sanity_pair.chr22.vcf.gz \
-    data/processed/asw.chr22.bial.vcf.gz
-$BCFTOOLS index -t data/processed/sanity_pair.chr22.vcf.gz
+    # ── 2c: Convert phased VCF to GERMLINE haploid PED ──────────────
+    if [[ ! -f "${HAP_PREFIX}.ped" ]]; then
+        echo "  Converting phased VCF to GERMLINE haploid format..."
+        $PYTHON scripts/vcf_to_germline_hap.py \
+            "$ASW_VCF" \
+            --out "$HAP_PREFIX" \
+            2>&1 | tee "logs/vcf_to_hap_chr${CHR}.log"
+    else
+        echo "  Haploid PED already present: ${HAP_PREFIX}.ped"
+    fi
 
-# Sanity PLINK
-$PLINK \
-    --vcf data/processed/sanity_pair.chr22.vcf.gz \
-    --genome --out results/sanity/plink_sanity \
-    --double-id --const-fid 0 \
-    2>&1 | tee logs/plink_sanity.log
+    # ── 2d: Run GERMLINE ─────────────────────────────────────────────
+    if [[ ! -f "${GERM_OUT}.match" ]]; then
+        echo "  Running GERMLINE..."
+        $GERMLINE \
+            -input "${HAP_PREFIX}.ped" "${HAP_PREFIX}.map" \
+            -output "$GERM_OUT" \
+            -min_m 1 \
+            > "${GERM_OUT}.log" 2>&1
+        echo "  GERMLINE segments: $(wc -l < ${GERM_OUT}.match)"
+    else
+        echo "  GERMLINE output already present ($(wc -l < ${GERM_OUT}.match) segments)"
+    fi
 
-# Sanity GERMLINE
-$PYTHON scripts/vcf_to_germline_hap.py \
-    data/processed/sanity_pair.chr22.vcf.gz \
-    --out data/processed/sanity_hap
-$GERMLINE \
-    -input data/processed/sanity_hap.ped data/processed/sanity_hap.map \
-    -output results/sanity/germline_sanity_phased \
-    -min_m 1 \
-    > results/sanity/germline_sanity_phased.log 2>&1
+    # ── 2e: Run Beagle IBD detection ────────────────────────────────
+    if [[ ! -f "${BEAGLE_OUT}.ibd.gz" ]]; then
+        echo "  Running Beagle IBD detection..."
+        java -Xmx4g -jar "$BEAGLE_JAR" \
+            gt="$ASW_VCF" \
+            out="$BEAGLE_OUT" \
+            ibd=true \
+            ibdcm=0.5 \
+            ibdlod=1e-6 \
+            nthreads=4 \
+            > "${BEAGLE_OUT}.log" 2>&1
+        N_BEAGLE=$($PYTHON -c "import gzip; d=gzip.open('${BEAGLE_OUT}.ibd.gz','rb').read(); print(d.count(b'\n'))")
+        echo "  Beagle segments: ${N_BEAGLE}"
+    else
+        N_BEAGLE=$($PYTHON -c "import gzip; d=gzip.open('${BEAGLE_OUT}.ibd.gz','rb').read(); print(d.count(b'\n'))")
+        echo "  Beagle output already present (${N_BEAGLE} segments)"
+    fi
 
-# Sanity Beagle
-java -Xmx2g -jar "$BEAGLE_JAR" \
-    gt=data/processed/sanity_pair.chr22.vcf.gz \
-    out=results/sanity/beagle_sanity \
-    ibd=true ibdcm=0.5 ibdlod=1e-6 nthreads=4 \
-    > results/sanity/beagle_sanity.log 2>&1
-
-echo "  Sanity PLINK PI_HAT:"
-awk 'NR>1 {print "  Z0="$7,"Z1="$8,"Z2="$9,"PI_HAT="$10}' results/sanity/plink_sanity.genome
-echo "  Sanity GERMLINE segments: $(wc -l < results/sanity/germline_sanity_phased.match)"
+done
 
 # ═══════════════════════════════════════════════════════════════════
-# STEP 8: Summarize results
+# STEP 3: Summarize results across chromosomes
 # ═══════════════════════════════════════════════════════════════════
-echo "[8] Summarizing results..."
+echo ""
+echo "[3] Summarizing results..."
+
+# Build argument lists for the summarize script
+GERM_ARGS=""
+BEAGLE_ARGS=""
+for CHR in $CHROMOSOMES; do
+    GERM_ARGS="$GERM_ARGS results/chr${CHR}/asw_germline.match"
+    BEAGLE_ARGS="$BEAGLE_ARGS results/chr${CHR}/asw_beagle.ibd.gz"
+done
+
 $PYTHON scripts/summarize_ibd_results.py \
-    --beagle-ibd results/asw_beagle.ibd.gz \
-    --germline-match results/asw_germline_phased.match \
-    --plink-genome results/asw_plink.genome \
+    --chromosomes $CHROMOSOMES \
+    --germline-matches $GERM_ARGS \
+    --beagle-ibds $BEAGLE_ARGS \
     --parent "$PARENT" \
     --child "$CHILD" \
     --outdir results/summary
 
 # ═══════════════════════════════════════════════════════════════════
-# STEP 9: Generate figures
+# STEP 4: Generate figures
 # ═══════════════════════════════════════════════════════════════════
-echo "[9] Generating figures..."
+echo ""
+echo "[4] Generating figures..."
+
 $PYTHON scripts/plot_analysis.py \
-    --beagle-ibd results/asw_beagle.ibd.gz \
-    --germline-match results/asw_germline_phased.match \
-    --plink-genome results/asw_plink.genome \
-    --overall-metrics results/summary/overall_metrics.tsv \
-    --pairs "NA20317:NA20318" "NA20359:NA20362" "NA20320:NA20321" \
+    --chromosomes $CHROMOSOMES \
+    --germline-matches $GERM_ARGS \
+    --beagle-ibds $BEAGLE_ARGS \
+    --parent "$PARENT" \
+    --child "$CHILD" \
     --outdir results/figures
 
 echo ""
 echo "=== Pipeline complete ==="
+echo "  Chromosomes: $CHROMOSOMES"
+echo "  Parent-child pair: $PARENT vs $CHILD"
 echo "  Results: results/"
 echo "  Figures: results/figures/"
 echo "  Summary: results/summary/"

@@ -1,0 +1,11 @@
+name: cse284-ibd
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.8
+  - matplotlib=3.5
+  - bcftools=1.19
+  - wget
+  - openjdk=8
