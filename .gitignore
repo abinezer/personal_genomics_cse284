@@ -32,6 +32,7 @@ results/chr*/
 results/sanity/
 results/summary/
 results/figures/*
+!results/figures/*.png
 !results/figures/.gitkeep
 
 # Genomics intermediate formats
