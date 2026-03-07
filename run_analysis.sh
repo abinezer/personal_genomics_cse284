@@ -31,7 +31,7 @@ PARENT="NA20317"
 CHILD="NA20318"
 
 # Chromosomes to process (space-separated)
-CHROMOSOMES="${CHROMOSOMES:-21 22}"
+CHROMOSOMES="${CHROMOSOMES:-13 22}"
 
 # FTP base for 1000G Phase 3 VCFs
 FTP_BASE="ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
@@ -41,6 +41,59 @@ mkdir -p data/processed data/raw results/summary results/figures logs
 
 # ── Load modules ──────────────────────────────────────────────────────────────
 module load bcftools/1.19 2>/dev/null || true
+
+# ── Locate java ───────────────────────────────────────────────────────────────
+if command -v java &>/dev/null; then
+    JAVA="java"
+elif [[ -x /usr/bin/java ]]; then
+    JAVA="/usr/bin/java"
+else
+    echo "ERROR: java not found. Install Java 8+ or load it via module." >&2
+    exit 1
+fi
+
+# ── Compile GERMLINE if binary is missing ─────────────────────────────────────
+if [[ ! -x "$GERMLINE" ]]; then
+    echo "[setup] GERMLINE binary not found at $GERMLINE — compiling from source..."
+    if [[ ! -d "tools/germline-master" ]]; then
+        echo "  Downloading GERMLINE source from GitHub..."
+        wget -q -O tools/germline.zip \
+            "https://github.com/sgusev/GERMLINE/archive/refs/heads/master.zip"
+        unzip -q tools/germline.zip -d tools/
+        mv tools/GERMLINE-master tools/germline-master 2>/dev/null || true
+        rm -f tools/germline.zip
+    fi
+    pushd tools/germline-master > /dev/null
+    make clean 2>/dev/null || true
+    make
+    popd > /dev/null
+    if [[ ! -x "$GERMLINE" ]]; then
+        echo "ERROR: GERMLINE compilation failed. Check tools/germline-master/ for errors." >&2
+        exit 1
+    fi
+    echo "  GERMLINE compiled: $GERMLINE"
+fi
+
+# ── Download Beagle jar if missing ───────────────────────────────────────────
+if [[ ! -f "$BEAGLE_JAR" ]]; then
+    echo "[setup] Beagle jar not found — downloading..."
+    wget -q -O "$BEAGLE_JAR" \
+        "https://faculty.washington.edu/browning/beagle/beagle.21Jan17.6cc.jar"
+    echo "  Downloaded: $BEAGLE_JAR"
+fi
+
+# ── Download required 1000G metadata files if missing ────────────────────────
+BASE_1KG="https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
+if [[ ! -f "$PANEL" ]]; then
+    echo "[setup] Downloading population panel..."
+    wget -q -O "$PANEL" "${BASE_1KG}/integrated_call_samples_v3.20130502.ALL.panel"
+    echo "  Downloaded: $PANEL"
+fi
+if [[ ! -f "$PED_FILE" ]]; then
+    echo "[setup] Downloading pedigree file..."
+    wget -q -O "$PED_FILE" "${BASE_1KG}/integrated_call_samples_v3.20250704.ALL.ped"
+    echo "  Downloaded: $PED_FILE"
+fi
 
 # ═══════════════════════════════════════════════════════════════════
 # STEP 0: Extract parent-child pairs from pedigree (informational)
@@ -120,11 +173,8 @@ for CHR in $CHROMOSOMES; do
     # ── 2d: Run GERMLINE ─────────────────────────────────────────────
     if [[ ! -f "${GERM_OUT}.match" ]]; then
         echo "  Running GERMLINE..."
-        $GERMLINE \
-            -input "${HAP_PREFIX}.ped" "${HAP_PREFIX}.map" \
-            -output "$GERM_OUT" \
-            -min_m 1 \
-            > "${GERM_OUT}.log" 2>&1
+        printf "1\n${HAP_PREFIX}.map\n${HAP_PREFIX}.ped\n${GERM_OUT}\n" | \
+            $GERMLINE -min_m 1 > "${GERM_OUT}.log" 2>&1
         echo "  GERMLINE segments: $(wc -l < ${GERM_OUT}.match)"
     else
         echo "  GERMLINE output already present ($(wc -l < ${GERM_OUT}.match) segments)"
@@ -133,7 +183,7 @@ for CHR in $CHROMOSOMES; do
     # ── 2e: Run Beagle IBD detection ────────────────────────────────
     if [[ ! -f "${BEAGLE_OUT}.ibd.gz" ]]; then
         echo "  Running Beagle IBD detection..."
-        java -Xmx4g -jar "$BEAGLE_JAR" \
+        $JAVA -Xmx4g -jar "$BEAGLE_JAR" \
             gt="$ASW_VCF" \
             out="$BEAGLE_OUT" \
             ibd=true \

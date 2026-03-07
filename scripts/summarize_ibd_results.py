@@ -142,8 +142,8 @@ def main():
             "jaccard": jaccard,
         })
 
-        g_pc = germ.get(pc_pair, [])
-        b_pc = beagle.get(pc_pair, [])
+        g_pc = merge_intervals(germ.get(pc_pair, []))
+        b_pc = merge_intervals(beagle.get(pc_pair, []))
         pc_rows.append({
             "chr": chrom,
             "parent": args.parent,
