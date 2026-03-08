@@ -109,7 +109,7 @@ def parse_beagle(path):
     return pairs, seg_lengths
 
 
-# ── Figure 1: Genome-wide karyogram for the parent-child pair ────────────────
+# -- Figure 1: Genome-wide karyogram for the parent-child pair ────────────────
 
 def plot_genome_karyogram(germ_by_chr, beagle_by_chr, chromosomes, id1, id2, outpath):
     """One row per chromosome showing GERMLINE and Beagle IBD segments."""
@@ -167,7 +167,7 @@ def plot_genome_karyogram(germ_by_chr, beagle_by_chr, chromosomes, id1, id2, out
     print(f"Saved: {outpath}")
 
 
-# ── Figure 2: Segment length histogram ───────────────────────────────────────
+# -- Figure 2: Segment length histogram ───────────────────────────────────────
 
 def plot_seg_length_hist(germ_lengths, beagle_lengths, outpath):
     fig, ax = plt.subplots(figsize=(8, 4))
@@ -189,7 +189,7 @@ def plot_seg_length_hist(germ_lengths, beagle_lengths, outpath):
     print(f"Saved: {outpath}")
 
 
-# ── Figure 3: Per-chromosome method overlap bar chart ────────────────────────
+# -- Figure 3: Per-chromosome method overlap bar chart ────────────────────────
 
 def plot_method_overlap(germ_by_chr, beagle_by_chr, chromosomes, outpath):
     def total_chr_bp(pairs_dict):
@@ -231,7 +231,7 @@ def plot_method_overlap(germ_by_chr, beagle_by_chr, chromosomes, outpath):
     print(f"Saved: {outpath}")
 
 
-# ── main ─────────────────────────────────────────────────────────────────────
+# -- main --------------------------------─
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)

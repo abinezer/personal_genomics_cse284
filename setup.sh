@@ -15,7 +15,7 @@ set -euo pipefail
 echo "=== CSE 284 IBD Project Setup ==="
 echo ""
 
-# ── 1. Conda environment ──────────────────────────────────────────────────────
+# -- 1. Conda environment ------------------------------------------------------
 if conda env list | grep -q "cse284-ibd"; then
     echo "[1] Conda environment 'cse284-ibd' already exists — skipping"
     echo "    To activate: conda activate cse284-ibd"
@@ -27,13 +27,13 @@ fi
 
 mkdir -p tools data/raw data/processed results/summary results/figures logs
 
-# ── 1c. Clear prior germline installs (fresh reinstall each run) ────────────
+# -- 1c. Clear prior germline installs (fresh reinstall each run) ------------------------------------------------------
 echo "[1c] Clearing prior germline installs..."
 rm -rf tools/germline-master tools/GERMLINE-master tools/germline2
 rm -f tools/germline.zip tools/germline2.zip
 echo "    Cleared legacy/new germline install directories"
 
-# ── 1b. Required panel/pedigree metadata ─────────────────────────────────────
+# -- 1b. Required panel/pedigree metadata ------------------------------------------------------
 echo "[1b] Ensuring required sample metadata files are in data/raw/..."
 
 PANEL_FILE="data/raw/integrated_call_samples_v3.20130502.ALL.panel"
@@ -57,7 +57,7 @@ else
     echo "    Downloaded: $PED_FILE"
 fi
 
-# ── 2. Beagle jar ─────────────────────────────────────────────────────────────
+# -- 2. Beagle jar ------------------------------------------------------
 BEAGLE_JAR="tools/beagle.21Jan17.6cc.jar"
 if [[ -f "$BEAGLE_JAR" ]]; then
     echo "[2] Beagle jar already present"
@@ -68,7 +68,7 @@ else
     echo "    Downloaded: $BEAGLE_JAR"
 fi
 
-# ── 3. germline2 (g2) ────────────────────────────────────────────────────────
+# -- 3. germline2 (g2) ------------------------------------------------------
 GERMLINE2_BIN="tools/germline2/g2"
 echo "[3] Installing germline2 from GitHub..."
 wget -q -O tools/germline2.zip \
@@ -93,7 +93,7 @@ else
     exit 1
 fi
 
-# ── 4. Verify tools ───────────────────────────────────────────────────────────
+# -- 4. Verify tools ------------------------------------------------------
 echo "[4] Verifying tools..."
 ERRORS=0
 
