@@ -71,7 +71,7 @@ done
 # -- Step 4: analyze and plot results ----------------------------------------------------------------------
 echo ""
 echo "[4] Analyzing results across chromosomes..."
-bash scripts/analyze.sh "$CHROMOSOMES" "$PARENT" "$CHILD"
+bash scripts/analyze.sh "$CHROMOSOMES"
 
 echo ""
 echo "=== Pipeline complete ==="
