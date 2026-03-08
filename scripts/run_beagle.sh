@@ -48,8 +48,8 @@ if [[ ! -f "${BEAGLE_OUT}.ibd.gz" ]]; then
         gt="$ASW_VCF" \
         out="$BEAGLE_OUT" \
         ibd=true \
-        ibdcm=0.5 \
-        ibdlod=1e-6 \
+        ibdcm=0.3 \
+        ibdlod=2.0 \
         nthreads=${THREADS} \
         > "${BEAGLE_OUT}.log" 2>&1
     N_BEAGLE=$($PYTHON -c "import gzip; d=gzip.open('${BEAGLE_OUT}.ibd.gz','rb').read(); print(d.count(b'\n'))")
