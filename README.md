@@ -120,8 +120,8 @@ All figures are written to `results/figures/`:
 Claude (Anthropic) was used to assist with minor Python and shell script development and documentation. The analysis design, method selection, parameter choices, and scientific interpretation were developed by the project authors.
 
 ## TODO: 
-- [ ] run on different beagle tolerances and pick one 
-- [ ] document choosing beagle tolerance 
-- [ ] test on full genome (autosomes)
+- [x] run on different beagle tolerances and pick one 
+- [x] test on full genome (autosomes)
+- [ ] manually add ch 2 and 17, not sure why didnt work 
 - [ ] edit key findings section 
 - [ ] edit README to reflect full genome 
