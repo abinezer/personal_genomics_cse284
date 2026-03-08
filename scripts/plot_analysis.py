@@ -51,6 +51,8 @@ def total_bp(ivs):
 
 
 def _iid(hap_id):
+    if hap_id.endswith(".0") or hap_id.endswith(".1"):
+        return hap_id[:-2]
     if "_" in hap_id:
         parts = hap_id.rsplit("_", 1)
         if parts[1].isdigit():
@@ -67,13 +69,27 @@ def parse_germline(path):
             if not line:
                 continue
             cols = line.split("\t")
+
+            # germline2 format: ID1 ID2 P0 P1 cM #words #gaps
+            if len(cols) >= 4 and cols[2].isdigit() and cols[3].isdigit():
+                iid1 = _iid(cols[0])
+                iid2 = _iid(cols[1])
+                start, end = int(cols[2]), int(cols[3])
+                pairs[norm_pair(iid1, iid2)].append((start, end))
+                seg_lengths.append(end - start)
+                continue
+
+            # legacy GERMLINE format fallback
             p1 = cols[0].split()
-            p2 = cols[1].split()
-            if len(p1) < 2 or len(p2) < 2:
+            p2 = cols[1].split() if len(cols) > 1 else []
+            if len(p1) < 2 or len(p2) < 2 or len(cols) < 4:
+                continue
+            se = cols[3].split()
+            if len(se) < 2:
                 continue
             iid1 = _iid(p1[1])
             iid2 = _iid(p2[1])
-            start, end = int(cols[3].split()[0]), int(cols[3].split()[1])
+            start, end = int(se[0]), int(se[1])
             pairs[norm_pair(iid1, iid2)].append((start, end))
             seg_lengths.append(end - start)
     return pairs, seg_lengths

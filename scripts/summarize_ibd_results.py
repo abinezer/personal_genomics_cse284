@@ -51,7 +51,9 @@ def total_bp(intervals):
 
 
 def _extract_iid(hap_id):
-    """Strip haplotype suffix: 'NA20317_1' -> 'NA20317'."""
+    """Strip haplotype suffixes used by GERMLINE/germline2."""
+    if hap_id.endswith(".0") or hap_id.endswith(".1"):
+        return hap_id[:-2]
     if "_" in hap_id:
         parts = hap_id.rsplit("_", 1)
         if parts[1].isdigit():
@@ -67,14 +69,27 @@ def parse_germline(path):
             if not line:
                 continue
             cols = line.split("\t")
+
+            # germline2 format: ID1 ID2 P0 P1 cM #words #gaps
+            if len(cols) >= 4 and cols[2].isdigit() and cols[3].isdigit():
+                iid1 = _extract_iid(cols[0])
+                iid2 = _extract_iid(cols[1])
+                start = int(cols[2])
+                end = int(cols[3])
+                pairs[norm_pair(iid1, iid2)].append((start, end))
+                continue
+
+            # legacy GERMLINE format fallback
             p1 = cols[0].split()
-            p2 = cols[1].split()
-            if len(p1) < 2 or len(p2) < 2:
+            p2 = cols[1].split() if len(cols) > 1 else []
+            if len(p1) < 2 or len(p2) < 2 or len(cols) < 4:
                 continue
             iid1 = _extract_iid(p1[1])
             iid2 = _extract_iid(p2[1])
-            start, end = cols[3].split()
-            pairs[norm_pair(iid1, iid2)].append((int(start), int(end)))
+            se = cols[3].split()
+            if len(se) < 2:
+                continue
+            pairs[norm_pair(iid1, iid2)].append((int(se[0]), int(se[1])))
     return pairs
 
 

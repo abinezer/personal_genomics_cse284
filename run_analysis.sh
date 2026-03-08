@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_analysis.sh — IBD comparison pipeline: GERMLINE vs Beagle
+# run_analysis.sh — IBD comparison pipeline: germline2 vs Beagle
 #
 # Usage:
 #   bash run_analysis.sh                        # run all chromosomes in CHROMOSOMES
@@ -9,7 +9,7 @@
 #   java         (Java 8+, used for Beagle)
 #   python3      (Python 3.6+, with matplotlib)
 #   bcftools     (loaded via module or in PATH)
-#   tools/germline-master/germline
+#   tools/germline2/g2
 #   tools/beagle.21Jan17.6cc.jar
 #
 # Data in data/raw/:
@@ -20,7 +20,7 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BEAGLE_JAR="${BEAGLE_JAR:-tools/beagle.21Jan17.6cc.jar}"
-GERMLINE="${GERMLINE:-tools/germline-master/germline}"
+GERMLINE2="${GERMLINE2:-tools/germline2/g2}"
 BCFTOOLS="${BCFTOOLS:-bcftools}"
 PYTHON="${PYTHON:-python3}"
 
@@ -36,6 +36,7 @@ CHROMOSOMES="${CHROMOSOMES:-21 22}"
 # FTP base for 1000G Phase 3 VCFs
 FTP_BASE="ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502"
 VCF_PATTERN="ALL.chr{CHR}.phase3_shapeit2_mvncall_integrated_v5b.20130502.genotypes.vcf.gz"
+MAP_BASE_URL="https://mathgen.stats.ox.ac.uk/impute/1000GP_Phase3"
 
 mkdir -p data/processed data/raw results/summary results/figures logs
 
@@ -102,35 +103,56 @@ for CHR in $CHROMOSOMES; do
         echo "  ASW VCF already present: $ASW_VCF"
     fi
 
-    HAP_PREFIX="data/processed/chr${CHR}/asw_hap"
-    GERM_OUT="${OUTDIR}/asw_germline"
+    HAPS_PREFIX="data/processed/chr${CHR}/asw_shapeit"
+    GERM2_MATCH="${OUTDIR}/asw_germline2.match"
     BEAGLE_OUT="${OUTDIR}/asw_beagle"
+    GMAP_DIR="data/raw/maps"
+    GMAP_FILE="${GMAP_DIR}/genetic_map_chr${CHR}_combined_b37.txt"
 
-    # ── 2c: Convert phased VCF to GERMLINE haploid PED ──────────────
-    if [[ ! -f "${HAP_PREFIX}.ped" ]]; then
-        echo "  Converting phased VCF to GERMLINE haploid format..."
-        $PYTHON scripts/vcf_to_germline_hap.py \
+    # ── 2c: Download genetic map (required for germline2) ──────────
+    mkdir -p "$GMAP_DIR"
+    if [[ ! -f "$GMAP_FILE" ]]; then
+        echo "  Downloading genetic map for chr${CHR}..."
+        wget -q --show-progress \
+            -O "$GMAP_FILE" \
+            "${MAP_BASE_URL}/genetic_map_chr${CHR}_combined_b37.txt" || {
+            echo "  ERROR: failed to download $GMAP_FILE"
+            echo "  Tried: ${MAP_BASE_URL}/genetic_map_chr${CHR}_combined_b37.txt"
+            echo "  Please place the map manually at: $GMAP_FILE"
+            exit 1
+        }
+    else
+        echo "  Genetic map already present: $GMAP_FILE"
+    fi
+
+    # ── 2d: Convert phased VCF to SHAPEIT haps/sample for germline2 ─
+    if [[ ! -f "${HAPS_PREFIX}.haps" || ! -f "${HAPS_PREFIX}.sample" ]]; then
+        echo "  Converting phased VCF to SHAPEIT haps/sample format..."
+        $PYTHON scripts/vcf_to_haps_sample.py \
             "$ASW_VCF" \
-            --out "$HAP_PREFIX" \
-            2>&1 | tee "logs/vcf_to_hap_chr${CHR}.log"
+            --out "$HAPS_PREFIX" \
+            2>&1 | tee "logs/vcf_to_haps_chr${CHR}.log"
     else
-        echo "  Haploid PED already present: ${HAP_PREFIX}.ped"
+        echo "  SHAPEIT files already present: ${HAPS_PREFIX}.haps/.sample"
     fi
 
-    # ── 2d: Run GERMLINE ─────────────────────────────────────────────
-    if [[ ! -f "${GERM_OUT}.match" ]]; then
-        echo "  Running GERMLINE..."
-        $GERMLINE \
-            -input "${HAP_PREFIX}.ped" "${HAP_PREFIX}.map" \
-            -output "$GERM_OUT" \
-            -min_m 1 \
-            > "${GERM_OUT}.log" 2>&1
-        echo "  GERMLINE segments: $(wc -l < ${GERM_OUT}.match)"
+    # ── 2e: Run germline2 ────────────────────────────────────────────
+    if [[ ! -f "$GERM2_MATCH" ]]; then
+        echo "  Running germline2 (haploid mode)..."
+        "$GERMLINE2" \
+            -h \
+            -m 1 \
+            "${HAPS_PREFIX}.haps" \
+            "${HAPS_PREFIX}.sample" \
+            "$GMAP_FILE" \
+            "$GERM2_MATCH" \
+            > "${OUTDIR}/asw_germline2.log" 2>&1
+        echo "  germline2 segments: $(wc -l < "$GERM2_MATCH")"
     else
-        echo "  GERMLINE output already present ($(wc -l < ${GERM_OUT}.match) segments)"
+        echo "  germline2 output already present ($(wc -l < "$GERM2_MATCH") segments)"
     fi
 
-    # ── 2e: Run Beagle IBD detection ────────────────────────────────
+    # ── 2f: Run Beagle IBD detection ────────────────────────────────
     if [[ ! -f "${BEAGLE_OUT}.ibd.gz" ]]; then
         echo "  Running Beagle IBD detection..."
         java -Xmx4g -jar "$BEAGLE_JAR" \
@@ -160,7 +182,7 @@ echo "[3] Summarizing results..."
 GERM_ARGS=""
 BEAGLE_ARGS=""
 for CHR in $CHROMOSOMES; do
-    GERM_ARGS="$GERM_ARGS results/chr${CHR}/asw_germline.match"
+    GERM_ARGS="$GERM_ARGS results/chr${CHR}/asw_germline2.match"
     BEAGLE_ARGS="$BEAGLE_ARGS results/chr${CHR}/asw_beagle.ibd.gz"
 done
 

@@ -7,7 +7,7 @@
 # What this does:
 #   1. Creates the conda environment (cse284-ibd) with Python + matplotlib + bcftools
 #   2. Downloads the Beagle 4.1 jar
-#   3. Downloads and compiles GERMLINE from GitHub
+#   3. Clears prior GERMLINE installs and installs germline2 (g2)
 #   4. Creates required directories
 #   5. Verifies all tools are working
 set -euo pipefail
@@ -27,6 +27,36 @@ fi
 
 mkdir -p tools data/raw data/processed results/summary results/figures logs
 
+# ── 1c. Clear prior germline installs (fresh reinstall each run) ────────────
+echo "[1c] Clearing prior germline installs..."
+rm -rf tools/germline-master tools/GERMLINE-master tools/germline2
+rm -f tools/germline.zip tools/germline2.zip
+echo "    Cleared legacy/new germline install directories"
+
+# ── 1b. Required panel/pedigree metadata ─────────────────────────────────────
+echo "[1b] Ensuring required sample metadata files are in data/raw/..."
+
+PANEL_FILE="data/raw/integrated_call_samples_v3.20130502.ALL.panel"
+PED_FILE="data/raw/integrated_call_samples_v3.20250704.ALL.ped"
+
+if [[ -f "$PANEL_FILE" ]]; then
+    echo "    Panel file already present: $PANEL_FILE"
+else
+    echo "    Downloading panel file..."
+    wget -q -O "$PANEL_FILE" \
+        "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20130502.ALL.panel"
+    echo "    Downloaded: $PANEL_FILE"
+fi
+
+if [[ -f "$PED_FILE" ]]; then
+    echo "    Pedigree file already present: $PED_FILE"
+else
+    echo "    Downloading pedigree file..."
+    wget -q -O "$PED_FILE" \
+        "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/integrated_call_samples_v3.20250704.ALL.ped"
+    echo "    Downloaded: $PED_FILE"
+fi
+
 # ── 2. Beagle jar ─────────────────────────────────────────────────────────────
 BEAGLE_JAR="tools/beagle.21Jan17.6cc.jar"
 if [[ -f "$BEAGLE_JAR" ]]; then
@@ -38,32 +68,29 @@ else
     echo "    Downloaded: $BEAGLE_JAR"
 fi
 
-# ── 3. GERMLINE ───────────────────────────────────────────────────────────────
-GERMLINE_BIN="tools/germline-master/germline"
-if [[ -f "$GERMLINE_BIN" ]]; then
-    echo "[3] GERMLINE binary already present"
+# ── 3. germline2 (g2) ────────────────────────────────────────────────────────
+GERMLINE2_BIN="tools/germline2/g2"
+echo "[3] Installing germline2 from GitHub..."
+wget -q -O tools/germline2.zip \
+    "https://github.com/gusevlab/germline2/archive/refs/heads/master.zip"
+unzip -q tools/germline2.zip -d tools/
+mv tools/germline2-master tools/germline2
+rm -f tools/germline2.zip
+
+echo "    Compiling germline2..."
+pushd tools/germline2 > /dev/null
+if [[ -f "Makefile" ]]; then
+    sed -i 's|-I/opt/boost-1.57.0/include/||g' Makefile
+fi
+make clean 2>/dev/null || true
+make
+popd > /dev/null
+
+if [[ -f "$GERMLINE2_BIN" ]]; then
+    echo "    Compiled: $GERMLINE2_BIN"
 else
-    if [[ ! -d "tools/germline-master" ]]; then
-        echo "[3] Downloading GERMLINE source from GitHub..."
-        wget -q -O tools/germline.zip \
-            "https://github.com/sgusev/GERMLINE/archive/refs/heads/master.zip"
-        unzip -q tools/germline.zip -d tools/
-        # GitHub zip extracts as GERMLINE-master
-        mv tools/GERMLINE-master tools/germline-master 2>/dev/null || true
-        rm -f tools/germline.zip
-        echo "    Downloaded GERMLINE source"
-    fi
-    echo "    Compiling GERMLINE..."
-    pushd tools/germline-master > /dev/null
-    make clean 2>/dev/null || true
-    make
-    popd > /dev/null
-    if [[ -f "$GERMLINE_BIN" ]]; then
-        echo "    Compiled: $GERMLINE_BIN"
-    else
-        echo "    ERROR: Compilation failed. Check tools/germline-master/ for errors."
-        exit 1
-    fi
+    echo "    ERROR: germline2 compilation failed. Check tools/germline2/ for errors."
+    exit 1
 fi
 
 # ── 4. Verify tools ───────────────────────────────────────────────────────────
@@ -103,12 +130,12 @@ else
     ERRORS=$((ERRORS+1))
 fi
 
-# GERMLINE
-if "$GERMLINE_BIN" 2>/dev/null | head -1 | grep -qi "germline\|usage\|error\|input"; then
-    echo "    GERMLINE: OK"
+# germline2 (g2)
+if "$GERMLINE2_BIN" 2>&1 | grep -qiE "Usage: g2|Incorrect number of parameters|Options:"; then
+    echo "    germline2 (g2): OK"
 else
-    # GERMLINE exits non-zero when called with no args but that's normal
-    echo "    GERMLINE: OK"
+    echo "    WARNING: germline2 did not return expected usage output"
+    ERRORS=$((ERRORS+1))
 fi
 
 # Beagle
@@ -129,11 +156,7 @@ fi
 echo ""
 echo "Next steps:"
 echo "  1. conda activate cse284-ibd"
-echo "  2. Place these files in data/raw/ (required, not auto-downloaded):"
-echo "       integrated_call_samples_v3.20130502.ALL.panel"
-echo "       integrated_call_samples_v3.20250704.ALL.ped"
-echo "     (share these with your collaborator directly)"
-echo "  3. bash run_analysis.sh"
+echo "  2. bash run_analysis.sh"
 echo ""
 echo "The pipeline will automatically download chr13 and chr22 VCFs from 1000G."
 echo "To run specific chromosomes: CHROMOSOMES='13 22' bash run_analysis.sh"

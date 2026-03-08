@@ -1,4 +1,4 @@
-# Detecting IBD Segments: GERMLINE vs Beagle
+# Detecting IBD Segments: germline2 vs Beagle
 
 **CSE 284 – Personal Genomics / Bioinformatics, UCSD WI26**
 **Authors:** Abishai Ebenezer (A69045190), Inna Amogolonova (A16725376)
@@ -10,7 +10,7 @@ This project benchmarks two methods for detecting Identity-by-Descent (IBD) segm
 
 | Tool | Input | Algorithm |
 |---|---|---|
-| **GERMLINE** | Phased haplotype PED/MAP | Hash-based haplotype matching |
+| **germline2** | Phased haplotype HAPS/SAMPLE + genetic map | Hash-based haplotype matching |
 | **Beagle 4.1** | Phased VCF | HMM-based Refined IBD |
 
 We apply both tools to the **1000 Genomes Phase 3 ASW** (African Ancestry in Southwest USA) population on chromosomes 13 and 22, then compare their outputs. We validate against a known mother-child pair (NA20317 → NA20318) confirmed from the 1000G pedigree.
@@ -21,19 +21,19 @@ We apply both tools to the **1000 Genomes Phase 3 ASW** (African Ancestry in Sou
 .
 ├── data/
 │   ├── raw/          # 1000G VCFs, panel, pedigree (large files, not tracked in git)
-│   └── processed/    # Per-chromosome ASW VCFs and GERMLINE haploid PEDs
+│   └── processed/    # Per-chromosome ASW VCFs and germline2 HAPS/SAMPLE inputs
 ├── results/
-│   ├── chr13/        # GERMLINE .match and Beagle .ibd.gz for chr13
-│   ├── chr22/        # GERMLINE .match and Beagle .ibd.gz for chr22
+│   ├── chr13/        # germline2 .match and Beagle .ibd.gz for chr13
+│   ├── chr22/        # germline2 .match and Beagle .ibd.gz for chr22
 │   ├── summary/      # Aggregate TSV metrics
 │   └── figures/      # All plots (PNG)
 ├── scripts/
-│   ├── vcf_to_germline_hap.py        # Convert phased VCF → GERMLINE haploid PED
+│   ├── vcf_to_haps_sample.py         # Convert phased VCF → SHAPEIT/IMPUTE HAPS+SAMPLE
 │   ├── summarize_ibd_results.py      # Aggregate and compare IBD outputs
 │   ├── plot_analysis.py              # Generate all figures
 │   └── extract_parent_child_pairs.py # Extract trios from 1000G pedigree
 ├── tools/
-│   └── germline-master/   # GERMLINE source (compiled by setup.sh)
+│   └── germline2/         # germline2 source (compiled by setup.sh)
 ├── environment.yml    # Conda environment specification
 ├── setup.sh           # One-time setup: installs tools and conda env
 └── run_analysis.sh    # End-to-end pipeline
@@ -42,21 +42,17 @@ We apply both tools to the **1000 Genomes Phase 3 ASW** (African Ancestry in Sou
 ## Quick Start
 
 ```bash
-# 1. One-time setup (creates conda env, downloads Beagle jar, downloads + compiles GERMLINE)
+# 1. One-time setup (creates conda env, downloads Beagle jar, installs germline2)
 bash setup.sh
 
 # 2. Activate the conda environment
 conda activate cse284-ibd
 
-# 3. Place the two required panel/pedigree files in data/raw/:
-#      integrated_call_samples_v3.20130502.ALL.panel
-#      integrated_call_samples_v3.20250704.ALL.ped
-
-# 4. Run the full pipeline (downloads chromosome VCFs automatically)
+# 3. Run the full pipeline (downloads chromosome VCFs + genetic maps automatically)
 bash run_analysis.sh
 ```
 
-`setup.sh` handles everything: conda environment creation, Beagle jar download from the Browning lab, and GERMLINE download + compilation from GitHub. The pipeline downloads 1000G chromosome VCFs from the EBI FTP automatically if they are not present.
+`setup.sh` handles conda environment creation, Beagle jar download, metadata download, and fresh germline2 install/compilation. The pipeline downloads 1000G chromosome VCFs and chromosome-specific genetic maps automatically if they are not present.
 
 To run specific chromosomes only:
 
@@ -81,7 +77,7 @@ CHROMOSOMES="13 22" bash run_analysis.sh
 | Tool | Version | How obtained |
 |---|---|---|
 | Beagle | 4.1 (21Jan17.6cc) | Downloaded automatically by `setup.sh` |
-| GERMLINE | master | Downloaded and compiled by `setup.sh` |
+| germline2 | master | Downloaded and compiled by `setup.sh` |
 | bcftools | 1.19 | conda env (`environment.yml`) or `module load bcftools/1.19` |
 | Python | 3.8 | conda env |
 | matplotlib | 3.5 | conda env |
@@ -93,11 +89,12 @@ CHROMOSOMES="13 22" bash run_analysis.sh
 
 1. Download 1000G Phase 3 VCF if not present
 2. Subset to ASW samples, biallelic SNPs (`bcftools view -m2 -M2 -v snps`)
-3. Convert phased VCF to GERMLINE haploid PED (`vcf_to_germline_hap.py`)
-4. Run GERMLINE (`-min_m 1`)
-5. Run Beagle IBD (`ibdcm=0.5`, `ibdlod=1e-6`)
-6. Summarize results across chromosomes (`summarize_ibd_results.py`)
-7. Generate figures (`plot_analysis.py`)
+3. Convert phased VCF to SHAPEIT HAPS/SAMPLE (`vcf_to_haps_sample.py`)
+4. Download per-chromosome GRCh37 genetic map (`genetic_map_chr*.txt`)
+5. Run germline2 (`-h -m 1`)
+6. Run Beagle IBD (`ibdcm=0.5`, `ibdlod=1e-6`)
+7. Summarize results across chromosomes (`summarize_ibd_results.py`)
+8. Generate figures (`plot_analysis.py`)
 
 All steps are idempotent — re-running skips already-completed steps.
 

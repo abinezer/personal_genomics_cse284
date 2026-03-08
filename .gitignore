@@ -16,16 +16,7 @@ reviewProject/
 data/raw/
 data/processed/
 logs/
-
-# Compiled GERMLINE binary and build artifacts (source IS tracked)
-tools/germline-master/germline
-tools/germline-master/*.o
-tools/germline-master/bin/
-tools/germline.tar.gz
-tools/germline.zip
-
-# Beagle jar (downloaded by setup.sh)
-tools/beagle.21Jan17.6cc.jar
+tools/
 
 # Results (generated; keep figures directory placeholder)
 results/chr*/
