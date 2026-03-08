@@ -122,6 +122,6 @@ Claude (Anthropic) was used to assist with minor Python and shell script develop
 ## TODO: 
 - [x] run on different beagle tolerances and pick one 
 - [x] test on full genome (autosomes)
-- [ ] manually add ch 2 and 17, not sure why didnt work 
+- [x] manually add ch 2 and 17, not sure why didnt work 
 - [ ] edit key findings section 
 - [ ] edit README to reflect full genome 
