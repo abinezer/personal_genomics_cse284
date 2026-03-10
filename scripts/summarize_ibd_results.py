@@ -12,6 +12,16 @@ from collections import defaultdict
 from pathlib import Path
 
 
+# hg19 chromosome lengths (bp) for autosomes
+HG19_CHR_LENGTHS = {
+    1: 249250621, 2: 243199373, 3: 198022430, 4: 191154276, 5: 180915260,
+    6: 171115067, 7: 159138663, 8: 146364022, 9: 141213431, 10: 135534747,
+    11: 135006516, 12: 133851895, 13: 115169878, 14: 107349540, 15: 102531392,
+    16: 90354753, 17: 81195210, 18: 78077248, 19: 59128983, 20: 63025520,
+    21: 48129895, 22: 51244237,
+}
+
+
 def norm_pair(a, b):
     return (a, b) if a <= b else (b, a)
 
@@ -132,6 +142,11 @@ def main():
         print(f"Chr{chrom}: parsing Beagle ({beagle_path})...")
         beagle = parse_beagle(beagle_path)
 
+        chrom_int = int(chrom)
+        if chrom_int not in HG19_CHR_LENGTHS:
+            raise ValueError(f"Chromosome length not available for chr{chrom} in hg19 table")
+        chromosome_bp = HG19_CHR_LENGTHS[chrom_int]
+
         all_pairs = sorted(set(germ) | set(beagle))
 
         germ_segs = germ_bp = beagle_segs = beagle_bp = overlap_bp = 0
@@ -147,18 +162,28 @@ def main():
         union_bp = germ_bp + beagle_bp - overlap_bp
         jaccard = round(overlap_bp / union_bp, 6) if union_bp > 0 else 0.0
 
+        g_pc = germ.get(pc_pair, [])
+        b_pc = beagle.get(pc_pair, [])
+        germline_chr_covered_bp = total_bp(g_pc)
+        beagle_chr_covered_bp = total_bp(b_pc)
+        germline_chr_covered_pct = round(100 * germline_chr_covered_bp / chromosome_bp, 6)
+        beagle_chr_covered_pct = round(100 * beagle_chr_covered_bp / chromosome_bp, 6)
+
         overall_rows.append({
             "chr": chrom,
+            "chromosome_bp": chromosome_bp,
             "germline_segments": germ_segs,
             "beagle_segments": beagle_segs,
             "germline_bp": germ_bp,
             "beagle_bp": beagle_bp,
+            "germline_chr_covered_bp": germline_chr_covered_bp,
+            "beagle_chr_covered_bp": beagle_chr_covered_bp,
+            "germline_chr_covered_pct": germline_chr_covered_pct,
+            "beagle_chr_covered_pct": beagle_chr_covered_pct,
             "overlap_bp": overlap_bp,
             "jaccard": jaccard,
         })
 
-        g_pc = germ.get(pc_pair, [])
-        b_pc = beagle.get(pc_pair, [])
         pc_rows.append({
             "chr": chrom,
             "parent": args.parent,
@@ -170,11 +195,15 @@ def main():
         })
 
         print(f"  Chr{chrom}: GERMLINE {germ_segs} segs, Beagle {beagle_segs} segs, "
-              f"overlap {overlap_bp/1e6:.1f} Mb, Jaccard {jaccard:.4f}")
+              f"overlap {overlap_bp/1e6:.1f} Mb, Jaccard {jaccard:.4f}, "
+              f"parent-child GERMLINE coverage {germline_chr_covered_pct:.2f}%, "
+              f"parent-child Beagle coverage {beagle_chr_covered_pct:.2f}%")
         print(f"  Chr{chrom} parent-child: GERMLINE {len(g_pc)} segs, Beagle {len(b_pc)} segs")
 
-    overall_fields = ["chr", "germline_segments", "beagle_segments",
-                      "germline_bp", "beagle_bp", "overlap_bp", "jaccard"]
+    overall_fields = ["chr", "chromosome_bp", "germline_segments", "beagle_segments",
+                "germline_bp", "beagle_bp", "germline_chr_covered_bp",
+                "beagle_chr_covered_bp", "germline_chr_covered_pct",
+                "beagle_chr_covered_pct", "overlap_bp", "jaccard"]
     with open(outdir / "overall_metrics.tsv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=overall_fields, delimiter="\t")
         w.writeheader()

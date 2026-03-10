@@ -21,7 +21,7 @@ tools/
 # Results (generated; keep figures directory placeholder)
 results/chr*/
 results/sanity/
-results/summary/
+results/summary/parent_child_check.tsv
 results/figures/*
 !results/figures/*.png
 !results/figures/.gitkeep
