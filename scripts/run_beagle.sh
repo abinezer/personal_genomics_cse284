@@ -31,7 +31,7 @@ fi
 ASW_VCF="data/processed/chr${CHR}/asw.chr${CHR}.bial.vcf.gz"
 if [[ ! -f "$ASW_VCF" ]]; then
     echo "ERROR: ASW VCF not found: $ASW_VCF"
-    echo "  Run scripts/prepare_data.sh $CHR first"
+    echo "  Run scripts/prep_data.sh $CHR first"
     exit 1
 fi
 

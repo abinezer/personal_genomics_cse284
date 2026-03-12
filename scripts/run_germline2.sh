@@ -22,14 +22,14 @@ fi
 ASW_VCF="data/processed/chr${CHR}/asw.chr${CHR}.bial.vcf.gz"
 if [[ ! -f "$ASW_VCF" ]]; then
     echo "ERROR: ASW VCF not found: $ASW_VCF"
-    echo "  Run scripts/prepare_data.sh $CHR first"
+    echo "  Run scripts/prep_data.sh $CHR first"
     exit 1
 fi
 
 GMAP_FILE="data/raw/maps/genetic_map_chr${CHR}_combined_b37.txt"
 if [[ ! -f "$GMAP_FILE" ]]; then
     echo "ERROR: genetic map not found: $GMAP_FILE"
-    echo "  Run scripts/prepare_data.sh $CHR first"
+    echo "  Run scripts/prep_data.sh $CHR first"
     exit 1
 fi
 

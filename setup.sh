@@ -12,10 +12,10 @@
 #   5. Verifies all tools work correctly
 #
 # System prerequisites (must be installed before running this):
-#   - curl or wget (for downloads)
-#   - Java 8+ (for Beagle)
-#   - gcc, make (for compiling germline2)
-#   - conda (for environment management)
+#   - curl or wget 
+#   - Java 8+
+#   - gcc, make 
+#   - conda 
 #
 # Check prerequisites:
 #   which wget java gcc make conda
@@ -49,7 +49,7 @@ mkdir -p tools data/raw data/processed results/summary results/figures logs
 echo "  SUCCESS: tools/, data/, results/, logs/ created"
 echo ""
 
-# -- 1. Create/activate conda environment -------------------------------------------------
+# -- Create/activate conda environment -------------------------------------------------
 echo "[1] Setting up conda environment..."
 if conda env list | grep -q "cse284-ibd"; then
     echo "  SUCCESS: Conda environment 'cse284-ibd' already exists"
@@ -63,7 +63,7 @@ echo "  NOTE: Activate manually before running pipeline:"
 echo "        conda activate cse284-ibd"
 echo ""
 
-# -- 2. Download required metadata files ------------------------------------------------- 
+# -- Download required metadata files ------------------------------------------------- 
 echo "[2] Downloading 1000 Genomes metadata files..."
 PANEL_FILE="data/raw/integrated_call_samples_v3.20130502.ALL.panel"
 PED_FILE="data/raw/integrated_call_samples_v3.20250704.ALL.ped"
@@ -87,7 +87,7 @@ else
 fi
 echo ""
 
-# -- 3. Download and compile germline2 -------------------------------------------------
+# -- Download and compile germline2 -------------------------------------------------
 echo "[3] Installing germline2..."
 GERMLINE2_BIN="tools/germline2/g2"
 
@@ -124,7 +124,7 @@ fi
 echo "  SUCCESS: Compiled germline2: $GERMLINE2_BIN"
 echo ""
 
-# -- 4. Download Beagle jar -------------------------------------------------
+# -- Download Beagle jar -------------------------------------------------
 echo "[4] Downloading Beagle 4.1..."
 BEAGLE_JAR="tools/beagle.21Jan17.6cc.jar"
 
@@ -142,7 +142,7 @@ else
 fi
 echo ""
 
-# -- 5. Verify system tools (without conda activation) -------------------------------------------------
+# -- Verify system tools (no conda activation) -------------------------------------------------
 echo "[5] Verifying system tools..."
 FAILED=0
 
