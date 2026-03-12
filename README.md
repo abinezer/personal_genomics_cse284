@@ -13,7 +13,7 @@ This project benchmarks two methods for detecting Identity-by-Descent (IBD) segm
 | **germline2** | Phased haplotype HAPS/SAMPLE + genetic map | Hash-based haplotype matching |
 | **Beagle 4.1** | Phased VCF | HMM-based Refined IBD |
 
-We apply both tools to the **1000 Genomes Phase 3 ASW** (African Ancestry in Southwest USA) population on chromosomes 21 and 22, then compare their outputs. We validate against a known parent-child pair (NA20317 → NA20318) confirmed from the 1000G pedigree.
+We apply both tools to the **1000 Genomes Phase 3 ASW** (African Ancestry in Southwest USA) population on chromosomes 13 and 22, then compare their outputs. We validate against a known parent-child pair (NA20317 → NA20318) confirmed from the 1000G pedigree.
 
 ## Dependencies 
 - Only available for Linux 
@@ -46,7 +46,7 @@ bash cleanup.sh
 To run specific chromosomes:
 
 ```bash
-bash run_full.sh --chromosomes '21 22'
+bash run_full.sh --chromosomes '13 22'
 ```
 
 To run on all autosomes:
@@ -61,12 +61,12 @@ Helper scripts can also be run separately (after setup and conda environment act
 bash scripts/prep_data.sh
 
 # 2. Run Germline2
-bash scripts/run_germline.sh
+bash scripts/run_germline2.sh
 
 # 3. Run Beagle
 bash scripts/run_beagle.sh
 
-# 4. Plot fugures and summarize analysis
+# 4. Plot figures and summarize analysis
 bash scripts/analyze.sh
 ```
 
@@ -76,34 +76,38 @@ bash scripts/analyze.sh
 - **Source:** 1000 Genomes Project Phase 3 ([internationalgenome.org](https://www.internationalgenome.org/data/))
 - **FTP:** `ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/`
 - **Population:** ASW (African Ancestry in Southwest USA) — 61 individuals
-- **Chromosomes:** 21 and 22 (biallelic SNPs only)
+- **Chromosomes:** 13 and 22 (biallelic SNPs only; configurable via `--chromosomes`)
 - **Phasing:** Pre-phased by SHAPEIT2 in the original 1000G release
 - **Known parent-child pair:** NA20317 (parent) → NA20318 (child), from the 1000G pedigree
 
 
 ## Key Results
 
+Full per-chromosome results are in [`results/summary/overall_metrics.tsv`](results/summary/overall_metrics.tsv) and [`results/summary/parent_child_check.tsv`](results/summary/parent_child_check.tsv).
+
 ### Chromosome 13 (115 Mb)
 
 | Metric | GERMLINE | Beagle |
 |---|---|---|
-| Total segments (all pairs) | 517 | 171 |
-| Total IBD detected | 773 Mb | 107 Mb |
-| Parent-child segments | 26 | 13 |
+| Total segments (all pairs) | 647 | 1317 |
+| Total IBD detected | 871.8 Mb | 527.1 Mb |
+| Chr covered | 63.7% | 22.3% |
+| Parent-child segments | 28 | 13 |
 | Parent-child IBD | 54.3 Mb (47% of chr) | 8.2 Mb |
-| Jaccard overlap | 9.4% | — |
+| Jaccard overlap | 19.1% | — |
 
 ### Chromosome 22 (51 Mb)
 
 | Metric | GERMLINE | Beagle |
 |---|---|---|
-| Total segments (all pairs) | 151 | 27 |
-| Total IBD detected | 213 Mb | 17 Mb |
+| Total segments (all pairs) | 348 | 299 |
+| Total IBD detected | 278.0 Mb | 114.0 Mb |
+| Chr covered | 48.3% | 10.2% |
 | Parent-child segments | 4 | 2 |
 | Parent-child IBD | 6.6 Mb | 1.1 Mb |
-| Jaccard overlap | 4.7% | — |
+| Jaccard overlap | 13.0% | — |
 
-GERMLINE consistently detects more and longer IBD segments than Beagle. The low Jaccard overlap (~5–9%) reflects algorithmic differences: GERMLINE uses exact haplotype matching while Beagle uses probabilistic HMM inference. Running GERMLINE on unphased diploid input produces zero parent-child segments — phased haploid input is required.
+GERMLINE consistently detects more and longer IBD segments than Beagle. The low Jaccard overlap reflects algorithmic differences: GERMLINE uses exact haplotype matching while Beagle uses probabilistic HMM inference. Running GERMLINE on unphased diploid input produces zero parent-child segments — phased haploid input is required.
 
 ### Figures
 
@@ -119,10 +123,3 @@ All figures are written to `results/figures/`:
 
 Claude (Anthropic) was used to assist with minor Python and shell script development and documentation. The analysis design, method selection, parameter choices, and scientific interpretation were developed by the project authors.
 
-## TODO: 
-- [x] run on different beagle tolerances and pick one 
-- [x] test on full genome (autosomes)
-- [x] manually add ch 2 and 17, not sure why didnt work 
-- [ ] edit key findings section in README.md
-- [ ] double check the analysis scripts and see if there are some other useful metrics we can display 
-- [ ] edit README to reflect full genome 
