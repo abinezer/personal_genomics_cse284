@@ -21,10 +21,8 @@ tools/
 # Results (generated; keep figures directory placeholder)
 results/chr*/
 results/sanity/
-results/summary/parent_child_check.tsv
-results/figures/*
-!results/figures/*.png
-!results/figures/.gitkeep
+!results/figures/*
+!results/summary/*
 
 # Genomics intermediate formats
 *.vcf
@@ -42,3 +40,6 @@ results/figures/*
 # Temp
 *.tmp
 *.swp
+
+# script to run parallel on different CPU cores -> not part of pipeline, just for efficiency 
+run_parallel.sh

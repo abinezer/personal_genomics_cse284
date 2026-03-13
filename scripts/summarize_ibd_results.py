@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Summarize IBD results from GERMLINE and Beagle across one or more chromosomes.
+"""Summarize parent-child IBD results from GERMLINE and Beagle across chromosomes.
 
 Produces (in --outdir):
-  overall_metrics.tsv      - aggregate stats per chromosome + total
-  parent_child_check.tsv   - validation rows for the known parent-child pair
+    parent_child_check.tsv   - per-chromosome metrics for the specified pair
 """
 import argparse
 import csv
@@ -133,7 +132,6 @@ def main():
 
     pc_pair = norm_pair(args.parent, args.child)
 
-    overall_rows = []
     pc_rows = []
 
     for chrom, germ_path, beagle_path in zip(args.chromosomes, args.germline_matches, args.beagle_ibds):
@@ -147,76 +145,77 @@ def main():
             raise ValueError(f"Chromosome length not available for chr{chrom} in hg19 table")
         chromosome_bp = HG19_CHR_LENGTHS[chrom_int]
 
-        all_pairs = sorted(set(germ) | set(beagle))
-
-        germ_segs = germ_bp = beagle_segs = beagle_bp = overlap_bp = 0
-        for pair in all_pairs:
-            g = germ.get(pair, [])
-            b = beagle.get(pair, [])
-            germ_segs += len(g)
-            beagle_segs += len(b)
-            germ_bp += total_bp(g)
-            beagle_bp += total_bp(b)
-            overlap_bp += intersect_len(g, b)
-
-        union_bp = germ_bp + beagle_bp - overlap_bp
-        jaccard = round(overlap_bp / union_bp, 6) if union_bp > 0 else 0.0
-
         g_pc = germ.get(pc_pair, [])
         b_pc = beagle.get(pc_pair, [])
         germline_chr_covered_bp = total_bp(g_pc)
         beagle_chr_covered_bp = total_bp(b_pc)
         germline_chr_covered_pct = round(100 * germline_chr_covered_bp / chromosome_bp, 6)
         beagle_chr_covered_pct = round(100 * beagle_chr_covered_bp / chromosome_bp, 6)
-
-        overall_rows.append({
-            "chr": chrom,
-            "chromosome_bp": chromosome_bp,
-            "germline_segments": germ_segs,
-            "beagle_segments": beagle_segs,
-            "germline_bp": germ_bp,
-            "beagle_bp": beagle_bp,
-            "germline_chr_covered_bp": germline_chr_covered_bp,
-            "beagle_chr_covered_bp": beagle_chr_covered_bp,
-            "germline_chr_covered_pct": germline_chr_covered_pct,
-            "beagle_chr_covered_pct": beagle_chr_covered_pct,
-            "overlap_bp": overlap_bp,
-            "jaccard": jaccard,
-        })
+        overlap_bp = intersect_len(g_pc, b_pc)
+        overlap_chr_pct = round(100 * overlap_bp / chromosome_bp, 6)
+        union_bp = germline_chr_covered_bp + beagle_chr_covered_bp - overlap_bp
+        jaccard = round(overlap_bp / union_bp, 6) if union_bp > 0 else 0.0
 
         pc_rows.append({
             "chr": chrom,
             "parent": args.parent,
             "child": args.child,
+            "chromosome_bp": chromosome_bp,
             "germline_segments": len(g_pc),
             "beagle_segments": len(b_pc),
-            "germline_bp": total_bp(g_pc),
-            "beagle_bp": total_bp(b_pc),
+            "germline_bp": germline_chr_covered_bp,
+            "beagle_bp": beagle_chr_covered_bp,
+            "germline_chr_covered_pct": germline_chr_covered_pct,
+            "beagle_chr_covered_pct": beagle_chr_covered_pct,
+            "overlap_bp": overlap_bp,
+            "overlap_chr_pct": overlap_chr_pct,
+            "jaccard": jaccard,
         })
 
-        print(f"  Chr{chrom}: GERMLINE {germ_segs} segs, Beagle {beagle_segs} segs, "
-              f"overlap {overlap_bp/1e6:.1f} Mb, Jaccard {jaccard:.4f}, "
-              f"parent-child GERMLINE coverage {germline_chr_covered_pct:.2f}%, "
-              f"parent-child Beagle coverage {beagle_chr_covered_pct:.2f}%")
-        print(f"  Chr{chrom} parent-child: GERMLINE {len(g_pc)} segs, Beagle {len(b_pc)} segs")
+    pc_fields = ["chr", "parent", "child", "chromosome_bp", "germline_segments", "beagle_segments",
+                 "germline_bp", "beagle_bp", "germline_chr_covered_pct", "beagle_chr_covered_pct",
+                 "overlap_bp", "overlap_chr_pct", "jaccard"]
 
-    overall_fields = ["chr", "chromosome_bp", "germline_segments", "beagle_segments",
-                "germline_bp", "beagle_bp", "germline_chr_covered_bp",
-                "beagle_chr_covered_bp", "germline_chr_covered_pct",
-                "beagle_chr_covered_pct", "overlap_bp", "jaccard"]
-    with open(outdir / "overall_metrics.tsv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=overall_fields, delimiter="\t")
-        w.writeheader()
-        w.writerows(overall_rows)
+    autosome_rows = []
+    for row in pc_rows:
+        try:
+            chrom_int = int(row["chr"])
+        except (TypeError, ValueError):
+            continue
+        if 1 <= chrom_int <= 22:
+            autosome_rows.append(row)
 
-    pc_fields = ["chr", "parent", "child", "germline_segments", "beagle_segments",
-                 "germline_bp", "beagle_bp"]
+    if autosome_rows:
+        avg_row = {
+            "chr": "autosome_avg",
+            "parent": args.parent,
+            "child": args.child,
+            "chromosome_bp": "",
+            "germline_segments": "",
+            "beagle_segments": "",
+            "germline_bp": "",
+            "beagle_bp": "",
+            "germline_chr_covered_pct": round(
+                sum(r["germline_chr_covered_pct"] for r in autosome_rows) / len(autosome_rows), 6
+            ),
+            "beagle_chr_covered_pct": round(
+                sum(r["beagle_chr_covered_pct"] for r in autosome_rows) / len(autosome_rows), 6
+            ),
+            "overlap_bp": "",
+            "overlap_chr_pct": round(
+                sum(r["overlap_chr_pct"] for r in autosome_rows) / len(autosome_rows), 6
+            ),
+            "jaccard": round(
+                sum(r["jaccard"] for r in autosome_rows) / len(autosome_rows), 6
+            ),
+        }
+        pc_rows.append(avg_row)
+
     with open(outdir / "parent_child_check.tsv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=pc_fields, delimiter="\t")
         w.writeheader()
         w.writerows(pc_rows)
 
-    print(f"\nWrote: {outdir}/overall_metrics.tsv")
     print(f"Wrote: {outdir}/parent_child_check.tsv")
 
 
