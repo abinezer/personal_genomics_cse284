@@ -1,125 +1,138 @@
 # Detecting IBD Segments: germline2 vs Beagle
 
-**CSE 284 – Personal Genomics / Bioinformatics, UCSD WI26**
+**CSE 284 – Personal Genomics, UCSD WI26**
 **Authors:** Abishai Ebenezer (A69045190), Inna Amogolonova (A16725376)
-**Project Option:** Option 2 – Apply two or more methods and compare on real data
+**Option 2:** Apply two or more methods and compare on real data
 
-## Overview
+---
 
-This project benchmarks two methods for detecting Identity-by-Descent (IBD) segments in genomic data:
+## What This Project Does
 
-| Tool | Input | Algorithm |
-|---|---|---|
-| **germline2** | Phased haplotype HAPS/SAMPLE + genetic map | Hash-based haplotype matching |
-| **Beagle 4.1** | Phased VCF | HMM-based Refined IBD |
+We compare two tools for detecting Identity-by-Descent (IBD) — genomic segments shared between individuals because they descend from a common ancestor:
 
-We apply both tools to the **1000 Genomes Phase 3 ASW** (African Ancestry in Southwest USA) population on chromosomes 13 and 22, then compare their outputs. We validate against a known parent-child pair (NA20317 → NA20318) confirmed from the 1000G pedigree.
+- **germline2** — finds IBD by exact haplotype matching
+- **Beagle 4.1** — finds IBD using a probabilistic hidden Markov model
 
-## Dependencies 
-- Only available for Linux 
-- Java 8+ 
-- wget 
-- conda 
-- gcc 
-- make 
+We run both tools on the **ASW population** (61 individuals of African ancestry) from the 1000 Genomes Project, across all 22 autosomes. Both tools take all 61 individuals as input and compare every possible pair — that's 1,830 pairs — to find shared segments across the genome. To validate, we then pull out the results for a known mother-child pair (**NA20317 → NA20318**) confirmed from the 1000G pedigree. A parent-child pair should show extensive genome-wide IBD sharing, so this relationship provides a useful sanity check for whether each method recovers an obvious first-degree relationship.
 
-Please ensure you met the above requirements before running the tool. 
+---
 
-## Instructions to Run 
+## Quickstart
 
 ```bash
-# 1. One-time setup (creates conda env, downloads Beagle jar, installs germline2)
+# 1. One-time setup: installs conda env, germline2, and Beagle
 bash setup.sh
 
-# 2. Activate the conda environment
+# 2. Activate the environment
 conda activate cse284-ibd
 
-# 3. Run the pipeline on chr22 by default 
-bash run_full.sh
+# 3. Run on all autosomes
+bash run_full.sh --chromosomes all
 
-# 4. Clean up before running the pipeline again (optional)
-bash cleanup.sh
-```
-
-`setup.sh` handles conda environment creation, Beagle download, metadata download, and fresh germline2 install/compilation. Run the pipeline within the created conda environment.
-
-To run specific chromosomes:
-
-```bash
+# 4. Or run on specific chromosomes
 bash run_full.sh --chromosomes '13 22'
 ```
 
-To run on all autosomes:
+`setup.sh` handles everything: downloads the Beagle jar, clones and compiles germline2 from source, creates the conda environment, and downloads the 1000G metadata files. The pipeline itself downloads chromosome VCFs automatically on first run.
 
-```bash
-bash run_full.sh --chromosomes all
-```
+If no `--chromosomes` argument is given, the pipeline runs **chromosome 22 only**. Use `--chromosomes all` for the full autosomal analysis.
 
-Helper scripts can also be run separately (after setup and conda environment activation). By default, the commands below run on chr22. Note, the commands must be run in the following order to avoid errors: 
-```bash
-# 1. Processing data 
-bash scripts/prep_data.sh
+**System requirements:** Linux, conda, Java 8+, gcc, make, wget
 
-# 2. Run Germline2
-bash scripts/run_germline2.sh
+---
 
-# 3. Run Beagle
-bash scripts/run_beagle.sh
+## Data
 
-# 4. Plot figures and summarize analysis
-bash scripts/analyze.sh
-```
+- **Source:** 1000 Genomes Project Phase 3 (pre-phased by SHAPEIT2)
+- **Population:** ASW — 61 individuals of African ancestry in Southwest USA
+- **Chromosomes:** All 22 autosomes (biallelic SNPs only)
+- **Validation pair:** NA20317 (mother) → NA20318 (child)
 
+---
 
-## Dataset
+## How the Pipeline Works
 
-- **Source:** 1000 Genomes Project Phase 3 ([internationalgenome.org](https://www.internationalgenome.org/data/))
-- **FTP:** `ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/`
-- **Population:** ASW (African Ancestry in Southwest USA) — 61 individuals
-- **Chromosomes:** 13 and 22 (biallelic SNPs only; configurable via `--chromosomes`)
-- **Phasing:** Pre-phased by SHAPEIT2 in the original 1000G release
-- **Known parent-child pair:** NA20317 (parent) → NA20318 (child), from the 1000G pedigree
+For each chromosome, `run_full.sh` does the following:
 
+1. Downloads the 1000G Phase 3 VCF (if not already present)
+2. Subsets to the 61 ASW samples and filters to biallelic SNPs
+3. Converts the phased VCF to HAPS/SAMPLE format for germline2
+4. Runs germline2 in haploid mode
+5. Runs Beagle IBD detection
+6. Summarizes results and generates figures
+
+All steps are idempotent — safe to re-run.
+
+## Methods / Parameters
+
+- **germline2** was run in haploid mode with `-h -m 1`
+- **Beagle 4.1** was run with `ibd=true ibdcm=0.3 ibdlod=2.0`
+- Input data were phased 1000 Genomes Phase 3 VCFs restricted to ASW samples and biallelic SNPs
+
+---
 
 ## Key Results
 
-Full per-chromosome results are in [`results/summary/overall_metrics.tsv`](results/summary/overall_metrics.tsv) and [`results/summary/parent_child_check.tsv`](results/summary/parent_child_check.tsv).
+We validate both tools on the known mother-child pair. A true parent-child relationship should show extensive IBD sharing across every chromosome, so we use this pair as a validation signal while also comparing segment counts and overlap.
 
-### Chromosome 13 (115 Mb)
+**Across all autosomes (NA20317 → NA20318):**
 
-| Metric | GERMLINE | Beagle |
-|---|---|---|
-| Total segments (all pairs) | 647 | 1317 |
-| Total IBD detected | 871.8 Mb | 527.1 Mb |
-| Chr covered | 63.7% | 22.3% |
-| Parent-child segments | 28 | 13 |
-| Parent-child IBD | 54.3 Mb (47% of chr) | 8.2 Mb |
-| Jaccard overlap | 19.1% | — |
-
-### Chromosome 22 (51 Mb)
-
-| Metric | GERMLINE | Beagle |
-|---|---|---|
-| Total segments (all pairs) | 348 | 299 |
-| Total IBD detected | 278.0 Mb | 114.0 Mb |
-| Chr covered | 48.3% | 10.2% |
-| Parent-child segments | 4 | 2 |
-| Parent-child IBD | 6.6 Mb | 1.1 Mb |
-| Jaccard overlap | 13.0% | — |
-
-GERMLINE consistently detects more and longer IBD segments than Beagle. The low Jaccard overlap reflects algorithmic differences: GERMLINE uses exact haplotype matching while Beagle uses probabilistic HMM inference. Running GERMLINE on unphased diploid input produces zero parent-child segments — phased haploid input is required.
-
-### Figures
-
-All figures are written to `results/figures/`:
-
-| Figure | Description |
+| Method | Avg. chr covered |
 |---|---|
-| `genome_karyogram_NA20317_NA20318.png` | IBD segments for the parent-child pair across specified chromosomes |
-| `seg_length_hist.png` | Distribution of IBD segment lengths (GERMLINE vs Beagle, specified chromosomes) |
-| `method_overlap.png` | Total IBD detected per chromosome per method |
+| germline2 | 67.9% |
+| Beagle | 17.6% |
+
+The autosome-average Jaccard overlap between the two callsets is **21.2%**, indicating that the methods often identify different segment boundaries even when they detect IBD in the same parent-child pair.
+
+germline2 detects substantially more IBD in the parent-child pair. The low Jaccard reflects algorithmic differences: germline2 uses exact haplotype matching and tends to call longer, more liberal segments, while Beagle's HMM is more conservative.
+
+Full per-chromosome results: [`results/summary/parent_child_check.tsv`](results/summary/parent_child_check.tsv)
+
+**IBD coverage across all autosomes (germline2 vs Beagle):**
+![IBD coverage per chromosome](results/figures/ibd_coverage_pct_NA20317_NA20318.png)
+
+**Genome-wide karyogram — shared segments on each chromosome:**
+![Genome karyogram](results/figures/genome_karyogram_NA20317_NA20318.png)
+
+### Example chromosomes
+
+| Metric | germline2 | Beagle |
+|---|---|---|
+| **Chr13** — parent-child segments | 34 | 61 |
+| **Chr13** — parent-child IBD | 73.4 Mb (63.7% of chr) | 25.6 Mb (22.3%) |
+| **Chr22** — parent-child segments | 22 | 12 |
+| **Chr22** — parent-child IBD | 24.7 Mb (48.3% of chr) | 5.2 Mb (10.2%) |
+
+**Total IBD detected per chromosome (all pairs):**
+![Method overlap](results/figures/method_overlap.png)
+
+**IBD segment length distribution:**
+![Segment lengths](results/figures/seg_length_hist.png)
+
+---
+
+## Output Files
+
+``` 
+data/
+└── processed/
+    └── parent_child_pairs.tsv  # extracted parent-child relationships from the 1000G pedigree
+
+results/
+├── chr{N}/
+│   ├── asw_germline2.match     # germline2 IBD segments
+│   └── asw_beagle.ibd.gz       # Beagle IBD segments
+├── summary/
+│   └── parent_child_check.tsv  # per-chromosome stats for the validation pair
+└── figures/
+    ├── genome_karyogram_NA20317_NA20318.png   # IBD segments across all autosomes
+    ├── ibd_coverage_pct_NA20317_NA20318.png   # per-chromosome IBD coverage %
+    ├── method_overlap.png                      # total IBD per chromosome per method
+    └── seg_length_hist.png                     # IBD segment length distributions
+```
+
+---
 
 ## LLM Usage
 
-Claude (Anthropic) was used to assist with minor Python and shell script development and documentation. The analysis design, method selection, parameter choices, and scientific interpretation were developed by the project authors.
-
+Claude (Anthropic) was used to assist with Python and shell script development and documentation. Analysis design, method selection, parameter choices, and scientific interpretation were done by the project authors.
