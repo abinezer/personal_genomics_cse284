@@ -63,6 +63,8 @@ For each chromosome, `run_full.sh` does the following:
 
 All steps are idempotent — safe to re-run.
 
+The pipeline also extracts all parent-child relationships present in the 1000 Genomes pedigree into `data/processed/parent_child_pairs.tsv`. This file is used to confirm that the validation pair (`NA20317` and `NA20318`) is a known mother-child relationship and provides a simple record of the pedigree-derived parent-child pairs available in the dataset.
+
 ## Methods / Parameters
 
 - **germline2** was run in haploid mode with `-h -m 1`
@@ -87,6 +89,8 @@ The autosome-average Jaccard overlap between the two callsets is **21.2%**, indi
 germline2 detects substantially more IBD in the parent-child pair. The low Jaccard reflects algorithmic differences: germline2 uses exact haplotype matching and tends to call longer, more liberal segments, while Beagle's HMM is more conservative.
 
 Full per-chromosome results: [`results/summary/parent_child_check.tsv`](results/summary/parent_child_check.tsv)
+
+In `parent_child_check.tsv`, the final row labeled `autosome_avg` reports the average coverage and overlap statistics across chromosomes 1-22 for the validation pair.
 
 **IBD coverage across all autosomes (germline2 vs Beagle):**
 ![IBD coverage per chromosome](results/figures/ibd_coverage_pct_NA20317_NA20318.png)
@@ -130,6 +134,10 @@ results/
     ├── method_overlap.png                      # total IBD per chromosome per method
     └── seg_length_hist.png                     # IBD segment length distributions
 ```
+
+`parent_child_pairs.tsv` contains four columns: `population`, `parent`, `child`, and `relationship` (`father-child` or `mother-child`). In this project, we use it to verify that `NA20317 -> NA20318` is a known parent-child pair before comparing the IBD calls from germline2 and Beagle.
+
+`parent_child_check.tsv` reports one row per chromosome for `NA20317 -> NA20318`, followed by a final `autosome_avg` row that summarizes the average chromosome coverage and overlap metrics across all autosomes.
 
 ---
 
