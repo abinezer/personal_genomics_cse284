@@ -205,6 +205,70 @@ def plot_ibd_coverage_pct(germ_by_chr, beagle_by_chr, chromosomes, id1, id2, out
     plt.close(fig)
     print(f"Saved: {outpath}")
 
+# -- Figure 3: Segment length histogram -----------------------------------------------
+
+def plot_seg_length_hist(germ_lengths, beagle_lengths, outpath):
+    fig, ax = plt.subplots(figsize=(8, 4))
+    bins = [b / 1e6 for b in range(0, 12_000_000, 500_000)]
+    ax.hist([l / 1e6 for l in germ_lengths], bins=bins,
+            alpha=0.65, color=COLOR_GERM, edgecolor="white", linewidth=0.4,
+            label=f"GERMLINE phased (n={len(germ_lengths)})")
+    ax.hist([l / 1e6 for l in beagle_lengths], bins=bins,
+            alpha=0.65, color=COLOR_BEAGLE, edgecolor="white", linewidth=0.4,
+            label=f"Beagle (n={len(beagle_lengths)})")
+    ax.set_xlabel("IBD Segment Length (Mb)")
+    ax.set_ylabel("Count")
+    ax.set_title("Distribution of IBD Segment Lengths: GERMLINE vs Beagle")
+    ax.legend()
+    ax.grid(axis="y", alpha=0.25, linewidth=0.6)
+    fig.tight_layout()
+    fig.savefig(outpath, dpi=200)
+    plt.close(fig)
+    print(f"Saved: {outpath}")
+
+
+# -- Figure 4: Per-chromosome method overlap bar chart ------------------------
+
+def plot_method_overlap(germ_by_chr, beagle_by_chr, chromosomes, outpath):
+    def total_chr_bp(pairs_dict):
+        return sum(total_bp(segs) for segs in pairs_dict.values()) / 1e6
+
+    chrom_labels = [f"Chr{c}" for c in chromosomes]
+    germ_totals = [total_chr_bp(germ_by_chr[c]) for c in chromosomes]
+    beagle_totals = [total_chr_bp(beagle_by_chr[c]) for c in chromosomes]
+
+    x = range(len(chromosomes))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(max(6, len(chromosomes) * 1.2), 4))
+    bars_g = ax.bar([i - width/2 for i in x], germ_totals, width,
+                    color=COLOR_GERM, alpha=0.85, label="GERMLINE phased")
+    bars_b = ax.bar([i + width/2 for i in x], beagle_totals, width,
+                    color=COLOR_BEAGLE, alpha=0.85, label="Beagle")
+
+    for bar in bars_g:
+        v = bar.get_height()
+        if v > 0:
+            ax.text(bar.get_x() + bar.get_width()/2, v + 0.5,
+                    f"{v:.0f}", ha="center", va="bottom", fontsize=7)
+    for bar in bars_b:
+        v = bar.get_height()
+        if v > 0:
+            ax.text(bar.get_x() + bar.get_width()/2, v + 0.5,
+                    f"{v:.0f}", ha="center", va="bottom", fontsize=7)
+
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(chrom_labels)
+    ax.set_ylabel("Total IBD Detected (Mb)")
+    ax.set_title("IBD Coverage by Method per Chromosome (ASW Population)")
+    ax.legend()
+
+    ax.grid(axis="y", alpha=0.25, linewidth=0.6)
+
+    fig.tight_layout()
+    fig.savefig(outpath, dpi=200)
+    plt.close(fig)
+    print(f"Saved: {outpath}")
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -221,13 +285,17 @@ def main():
 
     germ_by_chr = {}
     beagle_by_chr = {}
+    all_germ_lengths = []
+    all_beagle_lengths = []
 
     for chrom, gpath, bpath in zip(args.chromosomes, args.germline_matches, args.beagle_ibds):
         print(f"Parsing chr{chrom}...")
-        germ_pairs, _ = parse_germline(gpath)
-        beagle_pairs, _ = parse_beagle(bpath)
+        germ_pairs, germ_lens = parse_germline(gpath)
+        beagle_pairs, beagle_lens = parse_beagle(bpath)
         germ_by_chr[chrom] = germ_pairs
         beagle_by_chr[chrom] = beagle_pairs
+        all_germ_lengths.extend(germ_lens)
+        all_beagle_lengths.extend(beagle_lens)
 
     plot_genome_karyogram(
         germ_by_chr, beagle_by_chr, args.chromosomes,
@@ -239,6 +307,10 @@ def main():
         args.parent, args.child,
         outdir / f"ibd_coverage_pct_{args.parent}_{args.child}.png",
     )
+    plot_seg_length_hist(all_germ_lengths, all_beagle_lengths,
+                         outdir / "seg_length_hist.png")
+    plot_method_overlap(germ_by_chr, beagle_by_chr, args.chromosomes,
+                        outdir / "method_overlap.png")
 
 
 if __name__ == "__main__":
